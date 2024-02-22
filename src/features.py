@@ -50,11 +50,11 @@ def extract_MOPS(img, point):
         [0, 0, 1]], dtype=np.float32)
     
     # rotate to gradient magnitude direction to 0
-    dx, dy = filtering.grad(img)[59, 32, :]
+    dx, dy = filtering.grad(img)[x, y, :]
     angle = np.arctan2(dy, dx)
     rot = np.array([
-        [np.cos(angle), np.sin(angle), 0],
-        [-np.sin(angle), np.cos(angle), 0],
+        [np.cos(-angle), np.sin(-angle), 0],
+        [-np.sin(-angle), np.cos(-angle), 0],
         [0, 0, 1]], dtype=np.float32)
 
     # translate so a 5x5 patch has its corner at (0, 0)
@@ -68,13 +68,12 @@ def extract_MOPS(img, point):
     
     desc = geometry.warp(img, M[:2,:], dsize=(5, 5))
 
-    # TODO: standardize intensity values
+    desc = (desc - np.mean(desc)) / np.std(desc)
     
     return desc
     
 def ssd(f, g):
-    # TODO
-    pass
+    return np.sum((g - f)**2)
 
 
 
@@ -172,3 +171,31 @@ def overlay_features(img, corners):
     out[:,:,:] = img[:,:,np.newaxis] / 2
     out[corners>0, :] = [1, 0, 0]
     return out
+
+def match_images(img1, img2, thresh):
+    img1_corners = harris_corners(img1, thresh)
+    img2_corners = harris_corners(img2, thresh)
+
+    img1_points = get_harris_points(img1_corners)
+    img2_points = get_harris_points(img2_corners)
+   
+    img1_mops = []
+    for point in img1_points: #needs to be reshaped
+        print(len(point))
+        img1_mops.append(extract_MOPS(img1, point))
+      
+    img2_mops = []
+    for point in img2_points:
+        img2_mops.append(extract_MOPS(img2, point))
+
+    dist_matrix = np.zeros((len(img1_mops), len(img2_mops)))
+    for i, mops1 in enumerate(img1_mops):
+        for j, mops2 in enumerate(img2_mops):
+            dist = ssd(mops2, mops1)
+            dist_matrix[i,j] = dist
+
+    print(dist_matrix)
+
+    mins = np.argmin(dist_matrix, axis=1)
+
+    print(mins)
